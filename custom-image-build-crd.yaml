@@ -1,0 +1,105 @@
+---
+# This is an idea of what the CustomImageBuild CRD could look like.
+# Questions / comments / feedback welcome!
+apiVersion: machineconfiguration.openshift.io/v1
+kind: CustomImageBuild
+metadata:
+  labels:
+    # How we control which MachineConfigPool to apply this to.
+    pools.operator.machineconfiguration.openshift.io/worker: ""
+    # How to start the rollout of a built image. If this is set when the
+    # CustomImageBuild object is created, it will roll out the final image
+    # after being built; assuming preflight checks pass.
+    machineconfiguration.openshift.io/rollout: true
+    # How we can skip preflight checks.
+    machineconfiguration.openshift.io/skip-preflight-checks: true
+  name: update-my-base-image
+spec:
+  # Specify the image pull spec of ones customized image
+  osImageURL: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:fa17115f6f4eea86ee49ac4e61c8e2c69611a3370cf40cc04409e5c5a085d8b9
+  # Specify the image pull secret name. This should contain secrets for pulling
+  # the aforementioned image spec as well as push creds for the below staged
+  # image pullspec. Absent this value, we can default to the global pull secret.
+  imageRegistrySecretName: image-build-secret
+  # Where to push the staged image. This could default to a hard-coded
+  # ImageStream or in-cluster registry. If specified, the above
+  # imagePullSecretName should include a push / pull-scoped secret for the
+  # registry.
+  stagedImagePullspec: quay.io/a-customer/our-new-base-image:latest
+status:
+  finalImageLayers:
+    baseImageLayers:
+    # Layers from the Red Hat-provided base image
+    - sha256:2408cc74d12b6cd092bb8b516ba7d5e290f485d3eb9672efc00f0583730179e8
+    machineConfigLayers:
+    # Layers from the rendered MachineConfigs
+    # Note: We could even render each MachineConfig individually into its own
+    # layer, but for simplicity, lets assume there is only a single
+    # MachineConfig layer
+    - sha256:a68ad1b41f2a9acf1f38850980afad3bcdff15e1fa0697b5da85150baef4b5e0
+    otherLayers:
+    # Customer-provided layers
+    - sha256:3a1f3e32526c3bb556db86e096b88a2c0108b33aba78c7a6f437877920cfeac2
+    - sha256:e333ef2be9c761beefc4f67f6cd9b58105bf74a17725408dfc87dbe7869ef592
+  conditions:
+    # Shows whether the image is staged for rollout.
+    - lastTransitionTime: ""
+      message: "image could not be staged: Preflight Check C Failed: new OS base image does not match active base OS image"
+      reason: ""
+      status: "False"
+      type: ImageStaged
+    # Shows whether Preflight Check A Passed
+    - lastTransitionTime: ""
+      message: ""
+      reason: ""
+      status: "True"
+      type: PreflightCheckAPassed
+    # Shows whether Preflight Check B Passed
+    - lastTransitionTime: ""
+      message: ""
+      reason: ""
+      status: "True"
+      type: PreflightCheckBPassed
+    # Shows whether Preflight Check C Passed
+    - lastTransitionTime: ""
+      message: "Preflight Check C Failed: new OS base image does not match active base OS image"
+      reason: ""
+      status: "False"
+      type: PreflightCheckCPassed
+---
+# This represents a few changes we could make to the MachineConfigPool object.
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfigPool
+metadata:
+  labels:
+    machineconfiguration.openshift.io/mco-built-in: ""
+    pools.operator.machineconfiguration.openshift.io/worker: ""
+  name: worker
+spec:
+  # No change
+status:
+  osImage:
+    source:
+      # This would be present only if the cluster admin is using a custom base image.
+      customImageBuild:
+        name: update-my-base-image
+        pullspec: quay.io/a-customer/our-new-base-image:latest
+  # Currently active MachineConfig - no change from present.
+  configuration:
+    name: rendered-worker-f8aa13ca7419f2e1a0eaf7afb933ab41
+    source:
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 00-worker
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 01-worker-container-runtime
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 01-worker-kubelet
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 99-worker-generated-registries
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 99-worker-ssh
