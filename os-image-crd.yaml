@@ -1,0 +1,302 @@
+---
+# This is a different take on what the representation of an OS image CRD could
+# look like in OpenShift. In this mode, even the default OS image has an instance.
+#
+# Questions / comments / feedback welcome!
+apiVersion: machineconfiguration.openshift.io/v1
+kind: OSImage
+metadata:
+  labels:
+    # Starts rolling out the new image as soon as the final image builds
+    # complete. Contingent upon preflight checks passing. This works by
+    # updating the .spec.osImageName field on all MachineConfigPools.
+    machineconfiguration.openshift.io/auto-rollout: true
+    # Requires the cluster admin to begin the rollout by setting
+    # .spec.osImageName on all MachineConfigPools. Mutually exclusive with the
+    # above label. Does not apply to default OS images nor to MachineConfig
+    # updates.
+    machineconfiguration.openshift.io/manual-rollout: true
+    # How we can skip preflight checks.
+    # Does not apply to default OS images nor to MachineConfig updates.
+    machineconfiguration.openshift.io/skip-preflight-checks: true
+  # Even the default base image will have an instance of this object created.
+  name: default-os-image-<ocpVersion>
+spec:
+  # Specify the image pull spec. For default OS images, this will be the OS
+  # image pullspec specified in the OpenShift release.
+  #
+  # To reduce confusion, this would deprecate the osImageURL in the MachineConfig spec.
+  osImagePullspec: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:fa17115f6f4eea86ee49ac4e61c8e2c69611a3370cf40cc04409e5c5a085d8b9
+  # Specify the image registry secret name. This should contain secrets for
+  # pulling the aforementioned image spec as well as push creds for the below
+  # staged image pullspec.
+  #
+  # This value can be optional if we are using the default internal image
+  # registry / ImageStream configuration.
+  finalImageRegistrySecretName: final-image-push-secret
+  # Where to push the staged image. This could default to a hard-coded
+  # ImageStream or in-cluster registry. If specified, the above
+  # finalImageRegistrySecretName should include a push / pull-scoped secret for
+  # the desired registry.
+  #
+  # This value can be optional if we are using the default internal image
+  # registry / ImageStream configuration. Using an image tag will be forbidden.
+  finalImagePullspec: quay.io/a-customer/our-new-base-image
+status:
+  # Contains the versions of all of the important components of the OS image; e.g., kubelet, cri-o, etc.
+  softwareVersions:
+    bootctlVersion: |
+      systemd 239 (239-58.el8)
+      +PAM +AUDIT +SELINUX +IMA -APPARMOR +SMACK +SYSVINIT +UTMP +LIBCRYPTSETUP +GCRYPT +GNUTLS +ACL +XZ +LZ4 +SECCOMP +BLKID +ELFUTILS +KMOD +IDN2 -IDN +PCRE2 default-hierarchy=legacy
+    crioVersion: |
+      {
+        "version": "1.24.0-48.rhaos4.11.git0e22ab4.el8",
+        "goVersion": "go1.18",
+        "compiler": "gc",
+        "platform": "linux/amd64",
+        "linkmode": "dynamic",
+        "buildTags": [
+          "exclude_graphdriver_devicemapper",
+          "containers_image_ostree_stub",
+          "seccomp",
+          "selinux"
+        ],
+        "seccompEnabled": true,
+        "appArmorEnabled": false
+      }
+    kubeletVersion: |
+      Kubernetes v1.24.0+cb71478
+    ocVersion: |
+      {
+        "clientVersion": {
+          "major": "",
+          "minor": "",
+          "gitVersion": "4.11.0-202206132237.p0.g471fd44.assembly.stream-471fd44",
+          "gitCommit": "471fd443602c9e949d65dc4143320e8176fc9f02",
+          "gitTreeState": "clean",
+          "buildDate": "2022-06-13T22:45:43Z",
+          "goVersion": "go1.18",
+          "compiler": "gc",
+          "platform": "linux/amd64"
+        },
+        "kustomizeVersion": "v4.5.4",
+        "serverVersion": {
+          "major": "1",
+          "minor": "24",
+          "gitVersion": "v1.24.0+25f9057",
+          "gitCommit": "0a57f1f59bda75ea2cf13d9f3b4ac5d202134f2d",
+          "gitTreeState": "clean",
+          "buildDate": "2022-06-15T06:21:08Z",
+          "goVersion": "go1.18",
+          "compiler": "gc",
+          "platform": "linux/amd64"
+        },
+        "openshiftVersion": "4.11.0-0.nightly-2022-06-15-222801"
+      }
+    opensslVersion: "OpenSSL 1.1.1k  FIPS 25 Mar 2021\nbuilt on: Wed Mar 23 14:25:09 2022 UTC\nplatform: linux-x86_64\noptions:  bn(64,64) md2(char) rc4(16x,int) des(int) idea(int) blowfish(ptr) \ncompiler: gcc -fPIC -pthread -m64 -Wa,--noexecstack -Wall -O3 -O2 -g -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -fexceptions -fstack-protector-strong -grecord-gcc-switches -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 -m64 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -Wa,--noexecstack -Wa,--generate-missing-build-notes=yes -specs=/usr/lib/rpm/redhat/redhat-hardened-ld -DOPENSSL_USE_NODELETE -DL_ENDIAN -DOPENSSL_PIC -DOPENSSL_CPUID_OBJ -DOPENSSL_IA32_SSE2 -DOPENSSL_BN_ASM_MONT -DOPENSSL_BN_ASM_MONT5 -DOPENSSL_BN_ASM_GF2m -DSHA1_ASM -DSHA256_ASM -DSHA512_ASM -DKECCAK1600_ASM -DRC4_ASM -DMD5_ASM -DAESNI_ASM -DVPAES_ASM -DGHASH_ASM -DECP_NISTZ256_ASM -DX25519_ASM -DPOLY1305_ASM -DZLIB -DNDEBUG -DPURIFY -DDEVRANDOM=\"\\\"/dev/urandom\\\"\" -DSYSTEM_CIPHERS_FILE=\"/etc/crypto-policies/back-ends/openssl.config\"\nOPENSSLDIR: \"/etc/pki/tls\"\nENGINESDIR: \"/usr/lib64/engines-1.1\"\nSeeding source: os-specific\nengines:  rdrand dynamic \n"
+    osRelease: |
+      NAME="Red Hat Enterprise Linux CoreOS"
+      ID="rhcos"
+      ID_LIKE="rhel fedora"
+      VERSION="411.86.202206140233-0"
+      VERSION_ID="4.11"
+      PLATFORM_ID="platform:el8"
+      PRETTY_NAME="Red Hat Enterprise Linux CoreOS 411.86.202206140233-0 (Ootpa)"
+      ANSI_COLOR="0;31"
+      CPE_NAME="cpe:/o:redhat:enterprise_linux:8::coreos"
+      HOME_URL="https://www.redhat.com/"
+      DOCUMENTATION_URL="https://docs.openshift.com/container-platform/4.11/"
+      BUG_REPORT_URL="https://bugzilla.redhat.com/"
+      REDHAT_BUGZILLA_PRODUCT="OpenShift Container Platform"
+      REDHAT_BUGZILLA_PRODUCT_VERSION="4.11"
+      REDHAT_SUPPORT_PRODUCT="OpenShift Container Platform"
+      REDHAT_SUPPORT_PRODUCT_VERSION="4.11"
+      OPENSHIFT_VERSION="4.11"
+      RHEL_VERSION="8.6"
+      OSTREE_VERSION="411.86.202206140233-0"
+    podmanVersion: |
+      podman version 4.0.2
+    rpmOstreeVersion: |
+      rpm-ostree:
+       Version: '2022.2'
+       Git: 1e9e98d970d76d40808c4dc39b69626b6664f7f6
+       Features:
+        - rust
+        - compose
+    skopeoVersion: |
+      skopeo version 1.5.2
+  # When the OSImage object is created, a separate build will be started for
+  # each MachineConfigPool (and architecture). When a new MachineConfig is
+  # applied, we'll need to rebuild the final images and roll them out.
+  finalImages:
+    # Whether this image is currently active in that particular MachineConfigPool
+    - active: true
+      # What MachineConfigPool this image targets
+      mcpName: master
+      # What MachineConfig was rendered into the image
+      machineConfigName: rendered-master-2f1cfe95d8d95e1cb1d8674ac5154304
+      # What layers are in the final image, where they came from, and their SHAs.
+      layers:
+        - source: redhat
+          hash: sha256:2408cc74d12b6cd092bb8b516ba7d5e290f485d3eb9672efc00f0583730179e8
+        - source: redhat
+          hash: sha256:a68ad1b41f2a9acf1f38850980afad3bcdff15e1fa0697b5da85150baef4b5e0
+        - source: redhat
+          hash: sha256:3a1f3e32526c3bb556db86e096b88a2c0108b33aba78c7a6f437877920cfeac2
+        - source: machineconfig
+          hash: sha256:e333ef2be9c761beefc4f67f6cd9b58105bf74a17725408dfc87dbe7869ef592
+      # Image Build History
+      history:
+        - created: "2022-05-23T19:19:30.413290187Z"
+          created_by: '/bin/sh -c #(nop) ADD file:8e81116368669ed3dd361bc898d61bff249f524139a239fdaf3ec46869a39921 in / '
+        - created: "2022-05-23T19:19:31.970967174Z"
+          created_by: '/bin/sh -c #(nop)  CMD ["/bin/sh"]'
+          empty_layer: true
+        - created: "2022-06-22T16:04:18.416984454Z"
+          created_by: /bin/sh -c echo 'hi' > /etc/hi
+          comment: FROM docker.io/library/alpine:latest
+        - created: "2022-06-22T16:04:18.631579761Z"
+          created_by: '/bin/sh -c #(nop) LABEL foo bar'
+          comment: FROM 1c47bab6c5c5
+          empty_layer: true
+        - created: "2022-06-22T16:04:19.12985768Z"
+          created_by: /bin/sh -c echo 'ohai' > /etc/ohai
+          comment: FROM 2666cbc8d456
+        - created: "2022-06-22T16:04:19.3409023Z"
+          created_by: '/bin/sh -c #(nop) LABEL ohai kthxbai'
+          comment: FROM 7d52a9c766a5
+          empty_layer: true
+        - created: "2022-06-22T16:04:19.928219541Z"
+          created_by: /bin/sh -c echo 'kthxbai' > /etc/kthxbai
+          comment: FROM 7b5c927afd79
+        - created: "2022-06-22T16:04:20.146397808Z"
+          created_by: '/bin/sh -c #(nop) LABEL kthxbai ohai'
+          comment: FROM 1748a5336e0b
+          empty_layer: true
+      # The final image pullspec
+      # This is what rpm-ostree will rebase to.
+      pullspec: quay.io/a-customer/our-new-base-image@sha256:2ab3fe48e0be235574537de757332090747cc0efab789600488bd65722f21486
+    - active: true
+      mcpName: worker
+      machineConfigName: rendered-worker-01a453a5ab218957a93a14c82eb22e30
+      # ...
+      pullspec: quay.io/a-customer/our-new-base-image@sha256:22d84d34ff5abd7b4a3e7533500b0ba49fcad6c899fbeeceb39b3ad2579d457a
+  conditions:
+    # Indicates whether the image is the default OS image for a given OpenShift release.
+    # This is determined by comparing the pullspec to what's in the
+    # ClusterVersionOperator as well as the image digests.
+    - lastTransitionTime: ""
+      message: ""
+      reason: ""
+      status: "True"
+      type: DefaultOSImage
+    # Shows whether the image is staged for rollout.
+    - lastTransitionTime: ""
+      message: "image could not be staged: Preflight Check C Failed: new OS base image does not match active base OS image"
+      reason: ""
+      status: "False"
+      type: ImageStaged
+    # Shows whether Preflight Check A Passed
+    - lastTransitionTime: ""
+      message: ""
+      reason: ""
+      status: "True"
+      type: PreflightCheckAPassed
+    # Shows whether Preflight Check B Passed
+    - lastTransitionTime: ""
+      message: ""
+      reason: ""
+      status: "True"
+      type: PreflightCheckBPassed
+    # Shows whether Preflight Check C Passed
+    - lastTransitionTime: ""
+      message: "Preflight Check C Failed: new OS base image does not match active base OS image"
+      reason: ""
+      status: "False"
+      type: PreflightCheckCPassed
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfigPool
+metadata:
+  labels:
+    pools.operator.machineconfiguration.openshift.io/worker: ""
+  name: worker
+spec:
+  configuration:
+    name: rendered-worker-01a453a5ab218957a93a14c82eb22e30
+    source:
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 00-worker
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 01-worker-container-runtime
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 01-worker-kubelet
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 99-worker-generated-registries
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 99-worker-ssh
+  # Changing this value will cause the MCO to roll out the newly built OS images.
+  osImageName: default-os-image-<ocpVersion>
+  machineConfigSelector:
+    matchLabels:
+      machineconfiguration.openshift.io/role: worker
+  nodeSelector:
+    matchLabels:
+      node-role.kubernetes.io/worker: ""
+  paused: false
+status:
+  conditions:
+    - lastTransitionTime: "2022-06-23T20:02:25Z"
+      message: ""
+      reason: ""
+      status: "False"
+      type: RenderDegraded
+    - lastTransitionTime: "2022-06-23T20:02:30Z"
+      message: ""
+      reason: ""
+      status: "False"
+      type: NodeDegraded
+    - lastTransitionTime: "2022-06-23T20:02:30Z"
+      message: ""
+      reason: ""
+      status: "False"
+      type: Degraded
+    - lastTransitionTime: "2022-06-23T20:14:09Z"
+      message: All nodes are updated with rendered-worker-01a453a5ab218957a93a14c82eb22e30
+      reason: ""
+      status: "True"
+      type: Updated
+    - lastTransitionTime: "2022-06-23T20:14:09Z"
+      message: ""
+      reason: ""
+      status: "False"
+      type: Updating
+  configuration:
+    name: rendered-worker-01a453a5ab218957a93a14c82eb22e30
+    source:
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 00-worker
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 01-worker-container-runtime
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 01-worker-kubelet
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 99-worker-generated-registries
+      - apiVersion: machineconfiguration.openshift.io/v1
+        kind: MachineConfig
+        name: 99-worker-ssh
+  degradedMachineCount: 0
+  machineCount: 3
+  observedGeneration: 2
+  readyMachineCount: 3
+  unavailableMachineCount: 0
+  updatedMachineCount: 3
