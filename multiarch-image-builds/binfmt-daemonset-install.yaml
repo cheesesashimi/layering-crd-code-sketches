@@ -1,0 +1,33 @@
+# Run binfmt setup on any new node
+# Source: https://rolandsdev.blog/posts/how-to-install-and-run-qemu-on-k8s-nodes/
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: binfmt-install
+  labels:
+    app: binfmt-setup
+spec:
+  selector:
+    matchLabels:
+      name: binfmt
+  template:
+    metadata:
+      labels:
+        name: binfmt
+    spec:
+      initContainers:
+        - name: binfmt
+          image: tonistiigi/binfmt
+          args: ["--install", "all"]
+          securityContext:
+            privileged: true
+      containers:
+        - name: pause
+          image: gcr.io/google_containers/pause
+          resources:
+            limits:
+              cpu: 50m
+              memory: 50Mi
+            requests:
+              cpu: 50m
+              memory: 50Mi

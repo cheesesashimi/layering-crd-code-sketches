@@ -1,0 +1,195 @@
+---
+apiVersion: v1
+data:
+  Dockerfile: |
+    FROM registry.fedoraproject.org/fedora:36
+    RUN uname -a | tee /uname
+kind: ConfigMap
+metadata:
+  name: dockerfile
+---
+apiVersion: v1
+kind: ConfigMap
+data:
+  0: amd64
+  1: arm64
+  2: ppc64le
+  3: s390x
+metadata:
+  name: job-index
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: built-image
+spec:
+  lookupPolicy:
+    local: false
+status:
+  dockerImageRepository: image-registry.openshift-image-registry.svc:5000/default/built-image
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: image-build
+spec:
+  completions: 4
+  parallelism: 4
+  completionMode: Indexed
+  template:
+    spec:
+      containers:
+      - name: image-build
+        image: image-registry.openshift-image-registry.svc:5000/default/buildah-img:latest
+        workdir: /home/build
+        command:
+        - /bin/bash
+        - -c
+        - |
+          #!/bin/bash
+          set -xeuo
+
+          pwd
+          id
+          whoami
+
+          cp /tmp/dockerfile/Dockerfile "$PWD"
+
+          target_arch="$(cat /tmp/job-index/$JOB_COMPLETION_INDEX)"
+          tag="image-registry.openshift-image-registry.svc:5000/default/built-image:${target_arch}"
+
+          ls -la /var/run/secrets
+
+          buildah --version
+          buildah bud --arch "$target_arch" --storage-driver vfs --tag "$tag" .
+          buildah push --storage-driver vfs --authfile=/home/build/.docker/config.json --cert-dir /var/run/secrets/kubernetes.io/serviceaccount "$tag"
+        imagePullPolicy: Always
+        securityContext:
+          privileged: true
+        serviceAccount: builder
+        volumeMounts:
+        - name: dockerfile
+          mountPath: /tmp/dockerfile
+        - name: job-index
+          mountPath: /tmp/job-index
+        - name: registry-creds
+          mountPath: /home/build/.docker
+      restartPolicy: Never
+      volumes:
+      - name: dockerfile
+        configMap:
+          name: dockerfile
+      - name: job-index
+        configMap:
+          name: job-index
+      - name: registry-creds
+        secret:
+          secretName: imagestream-push-secrets
+          items:
+          - key: .dockerconfigjson
+            path: config.json
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: manifest-image-push
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: wait-for-build-jobs-to-complete
+          # This is the cli image which is part of every OpenShift Release.
+          image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c56de76d3498e5576fed5018880f3ecd3a7b6a9c85f9e037cdc4288e124f81d3
+          command:
+          - /bin/bash
+          - -c
+          - |
+            #!/bin/bash
+            set -xeuo
+
+            oc login "${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}" \
+              --token="$(cat /tmp/service-account-token/token)" \
+              --certificate-authority=/tmp/service-account-token/ca.crt
+
+            attempt_counter=0
+            max_attempts=60
+
+            expected="PodCompleted-True"
+
+            run_check() {
+              # We need to look at pods instead of job objects due to constraints with the service account. This still works though!
+              output="$(oc get pods --selector='job-name==image-build' -o jsonpath='{range .items[*]}{.status.conditions[0].reason}-{.status.conditions[0].status}{"\n"}{end}' | sort | uniq)"
+              if [[ "$output" == "$expected" ]]; then
+                return 0
+              fi
+
+              return 1
+            }
+
+            until $(run_check); do
+                if [ ${attempt_counter} -eq ${max_attempts} ];then
+                  echo "Max attempts reached"
+                  exit 1
+                fi
+
+                printf '.'
+                attempt_counter=$(($attempt_counter+1))
+                sleep 5
+            done
+          volumeMounts:
+          - name: service-account-token
+            mountPath: /tmp/service-account-token
+      containers:
+      - name: manifest-image-push
+        image: image-registry.openshift-image-registry.svc:5000/default/buildah-img:latest
+        workdir: /home/build
+        command:
+        - /bin/bash
+        - -c
+        - |
+          #!/bin/bash
+          set -xeuo
+
+          manifest_name="built-image-manifest"
+          imagestream_tag="image-registry.openshift-image-registry.svc:5000/default/built-image"
+          quay_tag="quay.io/zzlotnik/manifestlist-testing"
+
+          arches=(amd64 arm64 ppc64le s390x)
+
+          buildah --version
+          buildah --storage-driver vfs manifest create "${manifest_name}"
+
+          for arch in ${arches[@]}; do
+            buildah pull --storage-driver vfs --authfile=/home/build/.docker/config.json --cert-dir /var/run/secrets/kubernetes.io/serviceaccount "${imagestream_tag}:${arch}" &
+          done
+          wait
+
+          for arch in ${arches[@]}; do
+            buildah tag --storage-driver vfs "${imagestream_tag}:${arch}" "${quay_tag}:${arch}"
+            buildah --storage-driver vfs manifest add "${manifest_name}" "${quay_tag}:${arch}"
+          done
+
+          buildah --storage-driver vfs manifest push --authfile=/home/build/.quay/config.json --cert-dir /var/run/secrets/kubernetes.io/serviceaccount --all "${manifest_name}" "docker://${quay_tag}:latest"
+        imagePullPolicy: Always
+        volumeMounts:
+        - name: imagestream-registry-creds
+          mountPath: /home/build/.docker
+        - name: quay-registry-creds
+          mountPath: /home/build/.quay
+      restartPolicy: Never
+      volumes:
+      - name: service-account-token
+        secret:
+          secretName: deployer-token-nzdkp
+      - name: imagestream-registry-creds
+        secret:
+          secretName: imagestream-push-secrets
+          items:
+          - key: .dockerconfigjson
+            path: config.json
+      - name: quay-registry-creds
+        secret:
+          secretName: zzlotnik-openshiftpush-pull-secret
+          items:
+          - key: .dockerconfigjson
+            path: config.json

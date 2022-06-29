@@ -1,0 +1,30 @@
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: buildah-img
+spec:
+  lookupPolicy:
+    local: false
+status:
+  dockerImageRepository: image-registry.openshift-image-registry.svc:5000/default/buildah-img
+---
+kind: BuildConfig
+apiVersion: build.openshift.io/v1
+metadata:
+  name: "buildah-container"
+spec:
+  source:
+    dockerfile: |
+      FROM quay.io/buildah/stable:latest
+      RUN dnf install -y qemu-user-static && \
+        chmod -R 755 /etc/containers
+      ENV HOME=/home/build
+      USER build
+      WORKDIR /home/build
+  strategy:
+    dockerStrategy: {}
+  output:
+    to:
+      kind: "ImageStreamTag"
+      name: "buildah-img:latest"
