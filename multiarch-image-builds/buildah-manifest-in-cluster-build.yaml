@@ -108,8 +108,8 @@ spec:
             set -xeuo
 
             oc login "${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}" \
-              --token="$(cat /tmp/service-account-token/token)" \
-              --certificate-authority=/tmp/service-account-token/ca.crt
+              --token="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+              --certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
 
             attempt_counter=0
             max_attempts=60
@@ -136,9 +136,6 @@ spec:
                 attempt_counter=$(($attempt_counter+1))
                 sleep 5
             done
-          volumeMounts:
-          - name: service-account-token
-            mountPath: /tmp/service-account-token
       containers:
       - name: manifest-image-push
         image: image-registry.openshift-image-registry.svc:5000/default/buildah-img:latest
@@ -177,10 +174,8 @@ spec:
         - name: quay-registry-creds
           mountPath: /home/build/.quay
       restartPolicy: Never
+      serviceAccountName: deployer
       volumes:
-      - name: service-account-token
-        secret:
-          secretName: deployer-token-nzdkp
       - name: imagestream-registry-creds
         secret:
           secretName: imagestream-push-secrets
