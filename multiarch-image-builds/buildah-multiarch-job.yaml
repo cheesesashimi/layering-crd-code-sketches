@@ -1,0 +1,90 @@
+---
+apiVersion: v1
+data:
+  Dockerfile: |
+    FROM registry.fedoraproject.org/fedora:36
+    RUN uname -a | tee /uname
+kind: ConfigMap
+metadata:
+  name: dockerfile
+---
+apiVersion: v1
+kind: ConfigMap
+data:
+  0: amd64
+  1: arm64
+  2: ppc64le
+  3: s390x
+metadata:
+  name: job-index
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: built-image
+spec:
+  lookupPolicy:
+    local: false
+status:
+  dockerImageRepository: image-registry.openshift-image-registry.svc:5000/default/built-image
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: image-build
+spec:
+  completions: 4
+  parallelism: 4
+  completionMode: Indexed
+  template:
+    spec:
+      containers:
+      - name: image-build
+        image: image-registry.openshift-image-registry.svc:5000/default/buildah-img:latest
+        workdir: /home/build
+        command:
+        - /bin/bash
+        - -c
+        - |
+          #!/bin/bash
+          set -xeuo
+
+          pwd
+          id
+          whoami
+
+          cp /tmp/dockerfile/Dockerfile "$PWD"
+
+          target_arch="$(cat /tmp/job-index/$JOB_COMPLETION_INDEX)"
+          tag="image-registry.openshift-image-registry.svc:5000/default/built-image:${target_arch}"
+
+          ls -la /var/run/secrets
+
+          buildah --version
+          buildah bud --arch "$target_arch" --storage-driver vfs --tag "$tag" .
+          buildah push --storage-driver vfs --authfile=/home/build/.docker/config.json --cert-dir /var/run/secrets/kubernetes.io/serviceaccount "$tag"
+        imagePullPolicy: Always
+        securityContext:
+          privileged: true
+        serviceAccount: builder
+        volumeMounts:
+        - name: dockerfile
+          mountPath: /tmp/dockerfile
+        - name: job-index
+          mountPath: /tmp/job-index
+        - name: registry-creds
+          mountPath: /home/build/.docker
+      restartPolicy: Never
+      volumes:
+      - name: dockerfile
+        configMap:
+          name: dockerfile
+      - name: job-index
+        configMap:
+          name: job-index
+      - name: registry-creds
+        secret:
+          secretName: imagestream-push-secrets
+          items:
+          - key: .dockerconfigjson
+            path: config.json
