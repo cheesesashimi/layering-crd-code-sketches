@@ -8,55 +8,55 @@ spec:
   template:
     spec:
       containers:
-      - name: verify-os-image
-        env:
-        # Needed for skopeo to work
-        - name: HOME
-          value: /tmp/root
-        image: registry.ci.openshift.org/rhcos-devel/rhel-coreos:latest
-        command:
-        - /bin/bash
-        - -c
-        - |
-          #!/bin/bash
-          set -xeuo
+        - name: verify-os-image
+          env:
+            # Needed for skopeo to work
+            - name: HOME
+              value: /tmp/root
+          image: registry.ci.openshift.org/rhcos-devel/rhel-coreos:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              #!/bin/bash
+              set -xeuo
 
-          # The oc command is baked into the OS images, so we log in using a
-          # service account so we can create a configmap with the results of
-          # our inspection.
-          oc login "${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}" \
-            --token="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
-            --certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+              # The oc command is baked into the OS images, so we log in using a
+              # service account so we can create a configmap with the results of
+              # our inspection.
+              oc login "${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}" \
+                --token="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+                --certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
 
-          # Create a configmap with all the desired information contained
-          # within it. The MCO can listen for the creation of this configmap
-          # and once it exists, can extract the contents for further analysis /
-          # processing.
-          #
-          # Ideally, this command could be programmatically generated so we
-          # have a consistent way of managing configmap keys.
-          oc create configmap os-image-results \
-            --from-file=bootctl-version=<(bootctl --version) \
-            --from-file=crio-version=<(crio version --json | jq) \
-            --from-file=image-inspection=<(skopeo inspect --authfile=/ci-registry-pull-secret/.dockerconfigjson docker://registry.ci.openshift.org/rhcos-devel/rhel-coreos:latest | jq) \
-            --from-file=image-manifest=<(skopeo inspect --authfile=/ci-registry-pull-secret/.dockerconfigjson --raw docker://registry.ci.openshift.org/rhcos-devel/rhel-coreos:latest | jq) \
-            --from-file=kubelet-version=<(kubelet --version) \
-            --from-file=oc-version=<(oc version --output=json | jq) \
-            --from-file=openssl-version=<(openssl version -a) \
-            --from-file=os-release=/etc/os-release \
-            --from-file=podman-version=<(podman --version) \
-            --from-file=rpm-ostree-version=<(rpm-ostree --version) \
-            --from-file=skopeo-version=<(skopeo --version)
-        volumeMounts:
-        - name: ci-registry-pull-secret
-          mountPath: "/ci-registry-pull-secret"
-          readOnly: true
+              # Create a configmap with all the desired information contained
+              # within it. The MCO can listen for the creation of this configmap
+              # and once it exists, can extract the contents for further analysis /
+              # processing.
+              #
+              # Ideally, this command could be programmatically generated so we
+              # have a consistent way of managing configmap keys.
+              oc create configmap os-image-results \
+                --from-file=bootctl-version=<(bootctl --version) \
+                --from-file=crio-version=<(crio version --json | jq) \
+                --from-file=image-inspection=<(skopeo inspect --authfile=/ci-registry-pull-secret/.dockerconfigjson docker://registry.ci.openshift.org/rhcos-devel/rhel-coreos:latest | jq) \
+                --from-file=image-manifest=<(skopeo inspect --authfile=/ci-registry-pull-secret/.dockerconfigjson --raw docker://registry.ci.openshift.org/rhcos-devel/rhel-coreos:latest | jq) \
+                --from-file=kubelet-version=<(kubelet --version) \
+                --from-file=oc-version=<(oc version --output=json | jq) \
+                --from-file=openssl-version=<(openssl version -a) \
+                --from-file=os-release=/etc/os-release \
+                --from-file=podman-version=<(podman --version) \
+                --from-file=rpm-ostree-version=<(rpm-ostree --version) \
+                --from-file=skopeo-version=<(skopeo --version)
+          volumeMounts:
+            - name: ci-registry-pull-secret
+              mountPath: "/ci-registry-pull-secret"
+              readOnly: true
       # Need to figure out how to get global pull secret from service account
       # or if we'll need to manually inject it. The MCO can extract it from the
       # currently applied MachineConfigs, so that is a potential solution.
       volumes:
-      - name: ci-registry-pull-secret
-        secret:
-          secretName: ci-registry-pull-secret
+        - name: ci-registry-pull-secret
+          secret:
+            secretName: ci-registry-pull-secret
       restartPolicy: Never
   backoffLimit: 4

@@ -29,18 +29,18 @@ spec:
 status:
   finalImageLayers:
     baseImageLayers:
-    # Layers from the Red Hat-provided base image
-    - sha256:2408cc74d12b6cd092bb8b516ba7d5e290f485d3eb9672efc00f0583730179e8
+      # Layers from the Red Hat-provided base image
+      - sha256:2408cc74d12b6cd092bb8b516ba7d5e290f485d3eb9672efc00f0583730179e8
     machineConfigLayers:
-    # Layers from the rendered MachineConfigs
-    # Note: We could even render each MachineConfig individually into its own
-    # layer, but for simplicity, lets assume there is only a single
-    # MachineConfig layer
-    - sha256:a68ad1b41f2a9acf1f38850980afad3bcdff15e1fa0697b5da85150baef4b5e0
+      # Layers from the rendered MachineConfigs
+      # Note: We could even render each MachineConfig individually into its own
+      # layer, but for simplicity, lets assume there is only a single
+      # MachineConfig layer
+      - sha256:a68ad1b41f2a9acf1f38850980afad3bcdff15e1fa0697b5da85150baef4b5e0
     otherLayers:
-    # Customer-provided layers
-    - sha256:3a1f3e32526c3bb556db86e096b88a2c0108b33aba78c7a6f437877920cfeac2
-    - sha256:e333ef2be9c761beefc4f67f6cd9b58105bf74a17725408dfc87dbe7869ef592
+      # Customer-provided layers
+      - sha256:3a1f3e32526c3bb556db86e096b88a2c0108b33aba78c7a6f437877920cfeac2
+      - sha256:e333ef2be9c761beefc4f67f6cd9b58105bf74a17725408dfc87dbe7869ef592
   conditions:
     # Shows whether the image is staged for rollout.
     - lastTransitionTime: ""
@@ -76,7 +76,7 @@ metadata:
     pools.operator.machineconfiguration.openshift.io/worker: ""
   name: worker
 spec:
-  # No change
+# No change
 status:
   osImage:
     source:

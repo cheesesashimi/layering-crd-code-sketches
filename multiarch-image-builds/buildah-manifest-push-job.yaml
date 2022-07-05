@@ -11,77 +11,77 @@ spec:
           # This is the cli image which is part of every OpenShift Release.
           image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:c56de76d3498e5576fed5018880f3ecd3a7b6a9c85f9e037cdc4288e124f81d3
           command:
-          - /bin/bash
-          - -c
-          - |
-            #!/bin/bash
-            set -xeuo
-            oc login "${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}" \
-              --token="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
-              --certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-            attempt_counter=0
-            max_attempts=60
-            expected="PodCompleted-True"
-            run_check() {
-              # We need to look at pods instead of job objects due to constraints with the service account. This still works though!
-              output="$(oc get pods --selector='job-name==image-build' -o jsonpath='{range .items[*]}{.status.conditions[0].reason}-{.status.conditions[0].status}{"\n"}{end}' | sort | uniq)"
-              if [[ "$output" == "$expected" ]]; then
-                return 0
-              fi
-              return 1
-            }
-            until $(run_check); do
-                if [ ${attempt_counter} -eq ${max_attempts} ];then
-                  echo "Max attempts reached"
-                  exit 1
+            - /bin/bash
+            - -c
+            - |
+              #!/bin/bash
+              set -xeuo
+              oc login "${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}" \
+                --token="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+                --certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+              attempt_counter=0
+              max_attempts=60
+              expected="PodCompleted-True"
+              run_check() {
+                # We need to look at pods instead of job objects due to constraints with the service account. This still works though!
+                output="$(oc get pods --selector='job-name==image-build' -o jsonpath='{range .items[*]}{.status.conditions[0].reason}-{.status.conditions[0].status}{"\n"}{end}' | sort | uniq)"
+                if [[ "$output" == "$expected" ]]; then
+                  return 0
                 fi
-                printf '.'
-                attempt_counter=$(($attempt_counter+1))
-                sleep 5
-            done
+                return 1
+              }
+              until $(run_check); do
+                  if [ ${attempt_counter} -eq ${max_attempts} ];then
+                    echo "Max attempts reached"
+                    exit 1
+                  fi
+                  printf '.'
+                  attempt_counter=$(($attempt_counter+1))
+                  sleep 5
+              done
       containers:
-      - name: manifest-image-push
-        image: image-registry.openshift-image-registry.svc:5000/default/buildah-img:latest
-        workdir: /home/build
-        command:
-        - /bin/bash
-        - -c
-        - |
-          #!/bin/bash
-          set -xeuo
-          manifest_name="built-image-manifest"
-          imagestream_tag="image-registry.openshift-image-registry.svc:5000/default/built-image"
-          quay_tag="quay.io/zzlotnik/manifestlist-testing"
-          arches=(amd64 arm64 ppc64le s390x)
-          buildah --version
-          buildah --storage-driver vfs manifest create "${manifest_name}"
-          for arch in ${arches[@]}; do
-            buildah pull --storage-driver vfs --authfile=/home/build/.docker/config.json --cert-dir /var/run/secrets/kubernetes.io/serviceaccount "${imagestream_tag}:${arch}" &
-          done
-          wait
-          for arch in ${arches[@]}; do
-            buildah tag --storage-driver vfs "${imagestream_tag}:${arch}" "${quay_tag}:${arch}"
-            buildah --storage-driver vfs manifest add "${manifest_name}" "${quay_tag}:${arch}"
-          done
-          buildah --storage-driver vfs manifest push --authfile=/home/build/.quay/config.json --cert-dir /var/run/secrets/kubernetes.io/serviceaccount --all "${manifest_name}" "docker://${quay_tag}:latest"
-        imagePullPolicy: Always
-        volumeMounts:
-        - name: imagestream-registry-creds
-          mountPath: /home/build/.docker
-        - name: quay-registry-creds
-          mountPath: /home/build/.quay
+        - name: manifest-image-push
+          image: image-registry.openshift-image-registry.svc:5000/default/buildah-img:latest
+          workdir: /home/build
+          command:
+            - /bin/bash
+            - -c
+            - |
+              #!/bin/bash
+              set -xeuo
+              manifest_name="built-image-manifest"
+              imagestream_tag="image-registry.openshift-image-registry.svc:5000/default/built-image"
+              quay_tag="quay.io/zzlotnik/manifestlist-testing"
+              arches=(amd64 arm64 ppc64le s390x)
+              buildah --version
+              buildah --storage-driver vfs manifest create "${manifest_name}"
+              for arch in ${arches[@]}; do
+                buildah pull --storage-driver vfs --authfile=/home/build/.docker/config.json --cert-dir /var/run/secrets/kubernetes.io/serviceaccount "${imagestream_tag}:${arch}" &
+              done
+              wait
+              for arch in ${arches[@]}; do
+                buildah tag --storage-driver vfs "${imagestream_tag}:${arch}" "${quay_tag}:${arch}"
+                buildah --storage-driver vfs manifest add "${manifest_name}" "${quay_tag}:${arch}"
+              done
+              buildah --storage-driver vfs manifest push --authfile=/home/build/.quay/config.json --cert-dir /var/run/secrets/kubernetes.io/serviceaccount --all "${manifest_name}" "docker://${quay_tag}:latest"
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: imagestream-registry-creds
+              mountPath: /home/build/.docker
+            - name: quay-registry-creds
+              mountPath: /home/build/.quay
       restartPolicy: Never
       serviceAccountName: deployer
       volumes:
-      - name: imagestream-registry-creds
-        secret:
-          secretName: imagestream-push-secrets
-          items:
-          - key: .dockerconfigjson
-            path: config.json
-      - name: quay-registry-creds
-        secret:
-          secretName: zzlotnik-openshiftpush-pull-secret
-          items:
-          - key: .dockerconfigjson
-            path: config.json
+        - name: imagestream-registry-creds
+          secret:
+            secretName: imagestream-push-secrets
+            items:
+              - key: .dockerconfigjson
+                path: config.json
+        - name: quay-registry-creds
+          secret:
+            secretName: zzlotnik-openshiftpush-pull-secret
+            items:
+              - key: .dockerconfigjson
+                path: config.json
