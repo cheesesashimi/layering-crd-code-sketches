@@ -20,7 +20,7 @@ metadata:
     # Does not apply to default OS images nor to MachineConfig updates.
     machineconfiguration.openshift.io/skip-preflight-checks: true
   # Even the default base image will have an instance of this object created.
-  name: default-os-image-<ocpVersion>
+  name: default-os-image-<ocp-version>
 spec:
   # Specify the image pull spec. For default OS images, this will be the OS
   # image pullspec specified in the OpenShift release.
@@ -28,8 +28,8 @@ spec:
   # To reduce confusion, this would deprecate the osImageURL in the MachineConfig spec.
   osImagePullspec: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:fa17115f6f4eea86ee49ac4e61c8e2c69611a3370cf40cc04409e5c5a085d8b9
   # Specify the image registry secret name. This should contain secrets for
-  # pulling the aforementioned image spec as well as push creds for the below
-  # staged image pullspec.
+  # pulling the above osImagePullspec as well as push creds for the
+  # finalImagePullspec.
   #
   # This value can be optional if we are using the default internal image
   # registry / ImageStream configuration.
@@ -177,9 +177,10 @@ status:
       # This is what rpm-ostree will rebase to.
       pullspec: quay.io/a-customer/our-new-base-image@sha256:2ab3fe48e0be235574537de757332090747cc0efab789600488bd65722f21486
     - active: true
+      # This image targets the worker MachineConfigPool
       mcpName: worker
       machineConfigName: rendered-worker-01a453a5ab218957a93a14c82eb22e30
-      # ...
+      # (omitted for brevity, but this would invlude the history, layers, etc. as shown above)
       pullspec: quay.io/a-customer/our-new-base-image@sha256:22d84d34ff5abd7b4a3e7533500b0ba49fcad6c899fbeeceb39b3ad2579d457a
   conditions:
     # Indicates whether the image is the default OS image for a given OpenShift release.
@@ -241,7 +242,7 @@ spec:
         kind: MachineConfig
         name: 99-worker-ssh
   # Changing this value will cause the MCO to roll out the newly built OS images.
-  osImageName: default-os-image-<ocpVersion>
+  osImageName: default-os-image-<ocp-version>
   machineConfigSelector:
     matchLabels:
       machineconfiguration.openshift.io/role: worker
