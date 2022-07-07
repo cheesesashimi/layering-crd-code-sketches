@@ -9,11 +9,18 @@ spec:
 status:
   dockerImageRepository: image-registry.openshift-image-registry.svc:5000/default/buildah-img
 ---
-kind: BuildConfig
 apiVersion: build.openshift.io/v1
+kind: Build
 metadata:
-  name: "buildah-container"
+  name: buildah-image-build
 spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: buildah-img:latest
+  postCommit: {}
+  resources: {}
+  serviceAccount: builder
   source:
     dockerfile: |
       FROM quay.io/buildah/stable:latest
@@ -22,9 +29,7 @@ spec:
       ENV HOME=/home/build
       USER build
       WORKDIR /home/build
+    type: Dockerfile
   strategy:
     dockerStrategy: {}
-  output:
-    to:
-      kind: "ImageStreamTag"
-      name: "buildah-img:latest"
+    type: Docker
