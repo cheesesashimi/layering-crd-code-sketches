@@ -1,0 +1,8 @@
+diagrams==0.21.1
+gpg==1.15.1
+graphviz==0.19.2
+Jinja2==3.1.2
+libcomps==0.1.18
+MarkupSafe==2.1.1
+PyYAML==6.0
+rpm==4.17.0
