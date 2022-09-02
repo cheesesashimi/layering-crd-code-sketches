@@ -1,0 +1,68 @@
+---
+apiVersion: v1
+data:
+  script.py: |
+    #!/usr/bin/env python3
+
+    # I'm a placeholder
+    pass
+kind: ConfigMap
+metadata:
+  name: update-script
+  namespace: hypershift
+  labels:
+    in-cluster-build: ""
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"hypershift-operator:latest"},"fieldPath":"spec.template.spec.initContainers[?(@.name==\"hypershift\")].image"}]'
+  name: image-update-watcher
+  namespace: hypershift
+  labels:
+    app: image-watcher
+    in-cluster-build: ""
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: image-update-watcher
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        name: image-update-watcher
+        in-cluster-build: ""
+    spec:
+      initContainers:
+        - name: hypershift
+          # We don't really want to run anything in this container. What we're
+          # trying to do is cause this container to be updated whenever the
+          # image is (using the image.openshift.io/triggers) annotation. This will
+          # cause the deployment to restart and run the hosted-cluster-update script below.
+          image: quay.io/hypershift/hypershift-operator:latest
+          command: ["/usr/bin/uptime"]
+        - name: hosted-cluster-update
+          image: registry.ci.openshift.org/rhcos-devel/rhel-coreos:latest
+          command: []
+          volumeMounts:
+            - name: update-script
+              mountPath: /tmp/update-script
+      containers:
+        - name: pause
+          image: gcr.io/google_containers/pause
+          resources:
+            limits:
+              cpu: 50m
+              memory: 50Mi
+            requests:
+              cpu: 50m
+              memory: 50Mi
+      restartPolicy: Always
+      serviceAccountName: operator
+      volumes:
+        - name: update-script
+          configMap:
+            name: update-script
